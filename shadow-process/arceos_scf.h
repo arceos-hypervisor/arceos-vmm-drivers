@@ -27,12 +27,12 @@ inline void spin_unlock(spin_lock_t *lock) {
 void arceos_vdev_signal_handler(int sig);
 
 enum scf_opcode {
-    IPC_OP_NOP = 0,
-    IPC_OP_READ = 1,
-    IPC_OP_WRITE = 2,
-    IPC_OP_OPEN = 3,
-    IPC_OP_CLOSE = 4,
-    IPC_OP_UNKNOWN = 0xff,
+    IPC_OP_NOP = 0xff,
+    IPC_OP_READ = 0,
+    IPC_OP_WRITE = 1,
+    IPC_OP_OPEN = 2,
+    IPC_OP_CLOSE = 3,
+    IPC_OP_UNKNOWN = 0xfe,
 };
 
 struct syscall_queue_buffer_metadata {

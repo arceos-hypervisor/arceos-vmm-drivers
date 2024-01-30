@@ -2,6 +2,7 @@
 #include <unistd.h>
 
 #include "arceos_vdev.h"
+#include "arceos_scf.h"
 
 int main() {
     int fd;
@@ -15,6 +16,7 @@ int main() {
 
     for (;;) {
         puts("Shadow-process tick...");
+        poll_requests();
         usleep(100000);
     }
 

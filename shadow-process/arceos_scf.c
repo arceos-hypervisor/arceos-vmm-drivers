@@ -23,6 +23,10 @@ struct read_write_args {
     uint64_t len;
 };
 
+struct syscall_args {
+    uint64_t args[6];
+};
+
 static void *read_thread_fn(void *arg) {
     struct read_write_args *args;
     struct syscall_queue_buffer *scf_buf = get_syscall_queue_buffer();
@@ -46,31 +50,36 @@ void poll_requests(void) {
     struct scf_descriptor desc;
     struct syscall_queue_buffer *scf_buf = get_syscall_queue_buffer();
     pthread_t thread; // FIXME: use global threads pool
+    int count = 0;
 
-    printf("poll_requests\n");
+    printf("polling requests...\n");
 
     while (!pop_syscall_request(scf_buf, &desc_index, &desc)) {
-        printf("syscall: desc_index=%d, opcode=%d, args=0x%lx\n", desc_index,
-            desc.opcode, desc.args);
+        printf("syscall: desc_index=%d, opcode=%d, args=0x%lx\n", desc_index, desc.opcode, desc.args);
         switch (desc.opcode) {
         case IPC_OP_READ: {
+            // todo: correct this
             pthread_create(&thread, NULL, read_thread_fn, (void *)(long)desc_index);
             break;
         }
         case IPC_OP_WRITE: {
-            struct read_write_args *args = offset_to_ptr(desc.args);
-            char *buf = offset_to_ptr(args->buf_offset);
-            int ret = write(args->fd, buf, args->len);
-            assert(ret == args->len);
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            int fd = args->args[0];
+            char *buf = offset_to_ptr(args->args[1]);
+            int len = args->args[2];
+            int ret = write(fd, buf, len);
+            assert(ret == len);
             push_syscall_response(scf_buf, desc_index, ret);
             break;
         }
         default:
             break;
         }
+
+        count++;
     }
 
-    printf("poll_requests done\n");
+    printf("%d requests processed\n", count);
 }
 
 void arceos_vdev_signal_handler(int sig) {
@@ -146,14 +155,14 @@ struct scf_descriptor *get_syscall_request_from_index(struct syscall_queue_buffe
 int pop_syscall_request(struct syscall_queue_buffer *buf, uint16_t *out_index, struct scf_descriptor *out_desc) {
     int err;
     spin_lock(&buf->meta->lock);
-    printf("pop_syscall_request %d %d\n", buf->req_index_last, buf->meta->req_index);
+    // printf("pop_syscall_request %d %d\n", buf->req_index_last, buf->meta->req_index);
 
     if (has_request(buf)) {
         __sync_synchronize();
         uint16_t idx = buf->req_ring[buf->req_index_last & buf->capacity_mask];
-        printf("idx=%d\n", idx);
+        // printf("idx=%d\n", idx);
         if (idx > buf->capacity_mask) {
-            printf("idx > capacity_mask\n");
+            // printf("idx > capacity_mask\n");
             err = -EINVAL;
             goto end;
         }
@@ -162,7 +171,7 @@ int pop_syscall_request(struct syscall_queue_buffer *buf, uint16_t *out_index, s
         buf->req_index_last += 1;
         err = 0;
     } else {
-        printf("no request\n");
+        // printf("no request\n");
         err = -EBUSY;
     }
 
