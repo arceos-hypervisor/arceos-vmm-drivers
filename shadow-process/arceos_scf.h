@@ -8,6 +8,11 @@
 #include <assert.h>
 #include <stddef.h>
 
+/* linux does defined this but vscode somehow doesn't think so */
+#ifndef MAP_POPULATE
+# define MAP_POPULATE 0x008000
+#endif
+
 typedef uint8_t spin_lock_t;
 
 inline void spin_lock(spin_lock_t *lock) {
@@ -32,6 +37,11 @@ enum scf_opcode {
     IPC_OP_WRITE = 1,
     IPC_OP_OPEN = 2,
     IPC_OP_CLOSE = 3,
+
+    IPC_OP_WRITEV = 20,
+
+    IPC_OP_SPECIAL_MUST_MMAP = 0xfa, // it's very unlikely that we'll need to implement `keyctl` so we can use this opcode for mmap
+
     IPC_OP_UNKNOWN = 0xfe,
 };
 
@@ -64,7 +74,7 @@ static_assert(sizeof(struct syscall_queue_buffer_metadata) == 0xc);
 static_assert(sizeof(struct scf_descriptor) == 0x18);
 
 void poll_requests(void);
-int arceos_setup_syscall_buffers(int nimbos_fd);
+int arceos_setup_syscall_buffers(int fd);
 void *offset_to_ptr(uint64_t offset);
 struct syscall_queue_buffer *get_syscall_queue_buffer();
 struct scf_descriptor *get_syscall_request_from_index(struct syscall_queue_buffer *buf, uint16_t index);

@@ -1,5 +1,7 @@
 #include "arceos_scf.h"
 
+#include "arceos_vdev.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -14,6 +16,7 @@
 
 static void *syscall_data_buf_base;
 static void *syscall_queue_buf_base;
+static int vdev_fd;
 
 struct syscall_queue_buffer g_syscall_queue_buffer;
 
@@ -26,6 +29,17 @@ struct read_write_args {
 struct syscall_args {
     uint64_t args[6];
 };
+
+void dump_memory(void *addr, size_t size) {
+    // dump memory, 16 bytes per line
+    unsigned char *p = addr;
+    for (size_t i = 0; i < size; i++) {
+        if (i % 16 == 0 && i != 0) {
+            printf("\n%p: ", p);
+        }
+        printf("%02x ", p[i]);
+    }
+}
 
 static void *read_thread_fn(void *arg) {
     struct read_write_args *args;
@@ -45,6 +59,19 @@ static void *read_thread_fn(void *arg) {
     return NULL;
 }
 
+// TODO: move this to vdev driver
+#define SHADOW_PROCESS_GPA_BASE 0x60000000
+uint64_t alloc_shadow_process_gpa(uint32_t size) {
+    static uint64_t gpa = SHADOW_PROCESS_GPA_BASE;
+    uint64_t ret = gpa;
+
+    // round size up to 4KB
+    size = (size + 0xfff) & ~0xfff;
+
+    gpa += size;
+    return ret;
+}
+
 void poll_requests(void) {
     uint16_t desc_index;
     struct scf_descriptor desc;
@@ -52,7 +79,7 @@ void poll_requests(void) {
     pthread_t thread; // FIXME: use global threads pool
     int count = 0;
 
-    printf("polling requests...\n");
+    // printf("polling requests...\n");
 
     while (!pop_syscall_request(scf_buf, &desc_index, &desc)) {
         printf("syscall: desc_index=%d, opcode=%d, args=0x%lx\n", desc_index, desc.opcode, desc.args);
@@ -72,6 +99,42 @@ void poll_requests(void) {
             push_syscall_response(scf_buf, desc_index, ret);
             break;
         }
+        case IPC_OP_SPECIAL_MUST_MMAP: {
+            // hypervisor tells us to mmap a region, we should do it
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            uint64_t hpa = args->args[0];
+            uint64_t va = args->args[1];
+            uint32_t size = (uint32_t)(args->args[2]);
+
+            // allocate shadow process GPA
+            // TODO: driver should do this for us, because there might be multiple shadow processes
+            uint64_t gpa = alloc_shadow_process_gpa(size);
+
+            // send hypercall to request EPT mapping
+            printf("arceos_vdev_hypercall_ept_mapping_request: hpa=0x%lx, gpa=0x%lx, size=0x%x\n", hpa, gpa, size);
+            int ret = arceos_vdev_hypercall_ept_mapping_request(vdev_fd, hpa, gpa, size);
+            if (ret) {
+                printf("arceos_vdev_hypercall_ept_mapping_request failed: %d\n", ret);
+                push_syscall_response(scf_buf, desc_index, ret);
+                break;
+            }
+
+            // map the shadow process GPA to the virtual address
+            mmap((void *)va, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, vdev_fd, gpa);
+
+            push_syscall_response(scf_buf, desc_index, 0);
+            break;
+        }
+        case IPC_OP_WRITEV: {
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            int fd = args->args[0];
+            char *buf = (char *)(args->args[1]);
+            int len = args->args[2];
+            int ret = write(fd, buf, len);
+            assert(ret == len);
+            push_syscall_response(scf_buf, desc_index, ret);
+            break;
+        }
         default:
             break;
         }
@@ -79,7 +142,7 @@ void poll_requests(void) {
         count++;
     }
 
-    printf("%d requests processed\n", count);
+    // printf("%d requests processed\n", count);
 }
 
 void arceos_vdev_signal_handler(int sig) {
@@ -89,6 +152,8 @@ void arceos_vdev_signal_handler(int sig) {
 }
 
 int arceos_setup_syscall_buffers(int fd) {
+    vdev_fd = fd;
+
     syscall_data_buf_base = mmap(0, ARCEOS_SYSCALL_DATA_BUF_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, 0);
     if (syscall_data_buf_base == MAP_FAILED) {
         return -ENOMEM;
@@ -106,8 +171,7 @@ int arceos_setup_syscall_buffers(int fd) {
     uint16_t *req_ring, *rsp_ring;
     uint16_t capacity = meta->capacity;
 
-    // printf("%x %d %d %d %d %d\n", meta->magic, meta->capacity, meta->lock,
-    // meta->req_index, meta->rsp_index);
+    // printf("%x %d %d %d %d\n", meta->magic, meta->capacity, meta->lock, meta->req_index, meta->rsp_index);
 
     if (meta->magic != ARCEOS_SYSCALL_QUEUE_BUF_MAGIC) {
         return -EINVAL;

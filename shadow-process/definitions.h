@@ -17,7 +17,16 @@ struct arceos_vdev_hypercall_args {
     uint32_t return_value;
     uint32_t arg0;
     uint32_t arg1;
+    uint32_t arg2;
+    uint32_t arg3;
+    uint32_t arg4;
+    uint32_t reserved;
 };
+
+#define ARCEOS_HYPERCALL_SHADOW_PROCESS_READY           (0x53686477) /* "Shdw" */
+#define ARCEOS_HYPERCALL_SHADOW_PROCESS_READY_ARG0      (0x70726373) /* "prcs" */
+#define ARCEOS_HYPERCALL_SHADOW_PROCESS_READY_ARG1      (0x52647921) /* "Rdy!" */
+#define ARCEOS_HYPERCALL_EPT_MAPPING_REQUEST            (0x454d6170) /* "EMap" */
 
 #define ARCEOS_SYSCALL_DATA_BUF_PADDR                   (0x67eff000)
 #define ARCEOS_SYSCALL_DATA_BUF_SIZE                    (0x00100000)

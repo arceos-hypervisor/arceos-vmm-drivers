@@ -15,7 +15,7 @@ int main() {
     }
 
     for (;;) {
-        puts("Shadow-process tick...");
+        // puts("Shadow-process tick...");
         poll_requests();
         usleep(100000);
     }
