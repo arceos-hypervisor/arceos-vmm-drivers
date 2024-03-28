@@ -82,20 +82,47 @@ void poll_requests(void) {
     // printf("polling requests...\n");
 
     while (!pop_syscall_request(scf_buf, &desc_index, &desc)) {
-        printf("syscall: desc_index=%d, opcode=%d, args=0x%lx\n", desc_index, desc.opcode, desc.args);
+        // printf("syscall: desc_index=%d, opcode=%d, args=0x%lx\n", desc_index, desc.opcode, desc.args);
         switch (desc.opcode) {
         case IPC_OP_READ: {
-            // todo: correct this
-            pthread_create(&thread, NULL, read_thread_fn, (void *)(long)desc_index);
+            // todo: ~~correct this~~ if something goes wrong, revert it to async version
+            // pthread_create(&thread, NULL, read_thread_fn, (void *)(long)desc_index);
+            (void) thread; (void) read_thread_fn;
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            int fd = args->args[0];
+            char *buf = (char *)(args->args[1]);
+            int len = args->args[2];
+            int ret = 0;
+            // printf("# reading %d bytes read to %p\n", ret, buf);
+            ret = read(fd, buf, len);
+            // printf("# read, buf now: %s]\n", buf);
+            // assert(ret == len); of course not
+            push_syscall_response(scf_buf, desc_index, ret);
             break;
         }
         case IPC_OP_WRITE: {
             struct syscall_args *args = offset_to_ptr(desc.args);
             int fd = args->args[0];
-            char *buf = offset_to_ptr(args->args[1]);
+            char *buf = (char *)(args->args[1]);
             int len = args->args[2];
             int ret = write(fd, buf, len);
             assert(ret == len);
+            push_syscall_response(scf_buf, desc_index, ret);
+            break;
+        }
+        case IPC_OP_OPEN: {
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            char *path = (char *)(args->args[0]);
+            int flags = (int)args->args[1];
+            int mode = (int)args->args[2];
+            int ret = open(path, flags, mode);
+            push_syscall_response(scf_buf, desc_index, ret);
+            break;
+        }
+        case IPC_OP_CLOSE: {
+            struct syscall_args *args = offset_to_ptr(desc.args);
+            int fd = (int)args->args[0];
+            int ret = close(fd);
             push_syscall_response(scf_buf, desc_index, ret);
             break;
         }
@@ -110,8 +137,10 @@ void poll_requests(void) {
             // TODO: driver should do this for us, because there might be multiple shadow processes
             uint64_t gpa = alloc_shadow_process_gpa(size);
 
+            printf("shadow mapping: hpa=0x%lx, gpa=0x%lx, va=0x%lx, size=0x%x\n", hpa, gpa, va, size);
+
             // send hypercall to request EPT mapping
-            printf("arceos_vdev_hypercall_ept_mapping_request: hpa=0x%lx, gpa=0x%lx, size=0x%x\n", hpa, gpa, size);
+            // printf("arceos_vdev_hypercall_ept_mapping_request: hpa=0x%lx, gpa=0x%lx, size=0x%x\n", hpa, gpa, size);
             int ret = arceos_vdev_hypercall_ept_mapping_request(vdev_fd, hpa, gpa, size);
             if (ret) {
                 printf("arceos_vdev_hypercall_ept_mapping_request failed: %d\n", ret);
