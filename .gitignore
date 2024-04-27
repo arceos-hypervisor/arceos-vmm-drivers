@@ -1,3 +1,11 @@
 .vscode/
 *.o
+*.ko
 output/
+
+*.mod
+*.mod.c
+*.cmd
+
+*.symvers
+*.order
