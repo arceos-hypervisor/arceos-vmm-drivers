@@ -41,7 +41,9 @@ enum scf_opcode {
     IPC_OP_WRITEV = 20,
 
     IPC_OP_SPECIAL_MUST_MMAP = 0xfa, // it's very unlikely that we'll need to implement `keyctl` so we can use this opcode for mmap
-
+    IPC_OP_SPECIAL_OPEN_VDISK = 0xfb, // open a virtual disk, params: id, size expected (in blocks)
+    IPC_OP_SPECIAL_READ_VDISK_BLOCK = 0xfc, // read a block from a virtual disk, params: id, block number
+    IPC_OP_SPECIAL_WRITE_VDISK_BLOCK = 0xfd, // write a block to a virtual disk, params: id, block number
     IPC_OP_UNKNOWN = 0xfe,
 };
 

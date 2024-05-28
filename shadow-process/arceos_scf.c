@@ -72,6 +72,81 @@ uint64_t alloc_shadow_process_gpa(uint32_t size) {
     return ret;
 }
 
+#define VDISK_BLOCK_SIZE 512
+#define VDISK_BLOCK_SIZE_SHIFT 9
+#define MAX_VDISK 4
+#define MAX_VDISK_SIZE (16 * 1024 * 1024) // 16MB
+#define MAX_VDISK_BLOCKS (MAX_VDISK_SIZE / VDISK_BLOCK_SIZE)
+
+int vdisk_fd[MAX_VDISK];
+
+uint64_t handle_vdisk_request(struct scf_descriptor *desc) {
+    struct syscall_args *args = offset_to_ptr(desc->args);
+
+    switch (desc->opcode) {
+    case IPC_OP_SPECIAL_OPEN_VDISK: {
+        int id = (int)args->args[0];
+        if (id < 0 || id >= MAX_VDISK) {
+            return -EINVAL;
+        } else if (vdisk_fd[id] > 0) {
+            return -EBUSY;
+        }
+
+        char path[64];
+        snprintf(path, sizeof(path), "vdisk-%4x.img", id);
+        if ((vdisk_fd[id] = open(path, O_RDWR)) < 0) {
+            return -vdisk_fd[id];
+        }
+
+        return 0;
+    }
+    case IPC_OP_SPECIAL_READ_VDISK_BLOCK: {
+        int id = (int)args->args[0];
+        uint64_t block = args->args[1];
+        uint64_t buf_offset = args->args[2];
+        if (id < 0 || id >= MAX_VDISK || vdisk_fd[id] < 0) {
+            return -EINVAL;
+        }
+
+        off_t offset = block << VDISK_BLOCK_SIZE_SHIFT;
+        if (lseek(vdisk_fd[id], offset, SEEK_SET) < 0) {
+            return -errno;
+        }
+
+        char *buf = offset_to_ptr(buf_offset);
+        ssize_t ret = read(vdisk_fd[id], buf, VDISK_BLOCK_SIZE);
+        if (ret < 0) {
+            return -errno;
+        }
+
+        return ret;
+    }
+    case IPC_OP_SPECIAL_WRITE_VDISK_BLOCK: {
+        int id = (int)args->args[0];
+        uint64_t block = args->args[1];
+        uint64_t buf_offset = args->args[2];
+        if (id < 0 || id >= MAX_VDISK || vdisk_fd[id] < 0) {
+            return -EINVAL;
+        }
+
+        off_t offset = block << VDISK_BLOCK_SIZE_SHIFT;
+        if (lseek(vdisk_fd[id], offset, SEEK_SET) < 0) {
+            return -errno;
+        }
+
+        char *buf = offset_to_ptr(buf_offset);
+        ssize_t ret = write(vdisk_fd[id], buf, VDISK_BLOCK_SIZE);
+        if (ret < 0) {
+            return -errno;
+        }
+
+        return ret;
+    }
+    default:
+        return -EINVAL;
+    }
+} 
+
 void poll_requests(void) {
     uint16_t desc_index;
     struct scf_descriptor desc;
@@ -161,6 +236,13 @@ void poll_requests(void) {
             int len = args->args[2];
             int ret = write(fd, buf, len);
             assert(ret == len);
+            push_syscall_response(scf_buf, desc_index, ret);
+            break;
+        }
+        case IPC_OP_SPECIAL_OPEN_VDISK:
+        case IPC_OP_SPECIAL_READ_VDISK_BLOCK:
+        case IPC_OP_SPECIAL_WRITE_VDISK_BLOCK: {
+            int ret = handle_vdisk_request(&desc);
             push_syscall_response(scf_buf, desc_index, ret);
             break;
         }

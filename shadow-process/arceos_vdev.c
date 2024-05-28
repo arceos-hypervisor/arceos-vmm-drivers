@@ -102,6 +102,7 @@ int arceos_vdev_hypercall_shadow_process_ready(int fd) {
         &ret_val
     );
 }
+
 /**
  * Sends a hypercall to request EPT mapping between host physical address (HPA) and guest physical address (GPA).
  *
@@ -111,7 +112,6 @@ int arceos_vdev_hypercall_shadow_process_ready(int fd) {
  * @param size The size of the mapping.
  * @return The return value of the hypercall.
  */
-
 int arceos_vdev_hypercall_ept_mapping_request(int fd, uint64_t hpa, uint64_t gpa, uint32_t size) {
     uint32_t ret_val;
     
