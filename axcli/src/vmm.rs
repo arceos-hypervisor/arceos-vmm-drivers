@@ -1,93 +1,23 @@
-use core::ffi::c_void;
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::prelude::*;
 
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::{VmBootShutdownArgs, VmCreateArgs};
 use rustix::fd::OwnedFd;
 use rustix::fs::{open, Mode, OFlags};
 use rustix::ioctl;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct VmCreateCliArg {
-    // Basic Information
-    pub id: usize,
-    pub name: String,
-    pub vm_type: usize,
-    // Resources.
-    pub cpu_set: usize,
-
-    pub entry_point: usize,
-
-    pub bios_path: String,
-    pub bios_load_addr: usize,
-
-    pub kernel_path: String,
-    pub kernel_load_addr: usize,
-
-    pub ramdisk_path: Option<String>,
-    pub ramdisk_load_addr: Option<usize>,
-
-    pub disk_path: Option<String>,
-
-    /// Memory Information
-    pub memory_regions: Vec<VmMemCfg>,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct VmMemCfg {
-    pub gpa: usize,
-    pub size: usize,
-    pub flags: usize,
-}
-
-#[derive(Debug, Default)]
-#[repr(C)]
-struct VmCreateArg {
-    pub id: usize,
-    // pub vm_name_ptr: usize,
-    // pub vm_name_len: usize,
-    // pub vm_type: usize,
-    pub cpu_set: usize,
-    // pub bios_load_addr: usize,
-    pub bios_img_ptr: usize,
-    pub bios_img_size: usize,
-    // pub kernel_load_addr: usize,
-    pub kernel_img_ptr: usize,
-    pub kernel_img_size: usize,
-    // pub ramdisk_load_addr: usize,
-    pub ramdisk_img_ptr: usize,
-    pub ramdisk_img_size: usize,
-
-    pub raw_cfg_file_ptr: usize,
-    pub raw_cfg_file_size: usize,
-}
-
-unsafe impl ioctl::Ioctl for VmCreateArg {
-    type Output = ();
-
-    const OPCODE: ioctl::Opcode = ioctl::Opcode::write::<Self>(0, 6);
-
-    const IS_MUTATING: bool = false;
-
-    fn as_ptr(&mut self) -> *mut c_void {
-        self as *const _ as *mut c_void
-    }
-
-    unsafe fn output_from_ptr(
-        _out: ioctl::IoctlOutput,
-        _extract_output: *mut c_void,
-    ) -> rustix::io::Result<Self::Output> {
-        Ok(())
-    }
-}
+use crate::cfg::VmCreateCliArg;
+use crate::cli::{VmBootShutdownArgs, VmCreateArgs};
+use crate::ioctl_arg::{VmBootIoctlArg, VmCreateIoctlArg, VmShutdownIoctlArg};
 
 pub fn open_driver() -> OwnedFd {
     let driver = String::from("/dev/jailhouse");
     open(driver, OFlags::RDWR, Mode::RWXO).expect("Failed to open ArceOS driver")
+}
+
+pub fn perform_ioctl<I: ioctl::Ioctl>(ioctl: I) {
+    let fd = open_driver();
+    unsafe { ioctl::ioctl(fd, ioctl) }.expect("failed to perform ioctl");
 }
 
 pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
@@ -95,10 +25,6 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
 
     let vm_arg: VmCreateCliArg =
         toml::from_str(config_content.as_str()).map_err(|err| err.to_string())?;
-
-    // let memory_regions_serialized = toml::to_string(vm_arg.memory_regions.as_slice()).unwrap();
-
-    // debug!("memory_regions_serialized {}", memory_regions_serialized);
 
     debug!("get vm_arg {:#x?}", vm_arg);
 
@@ -126,7 +52,7 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
         ramdisk_file
     });
 
-    let driver_arg = VmCreateArg {
+    let driver_arg = VmCreateIoctlArg {
         id: vm_arg.id,
         // vm_name_ptr: vm_arg.name.as_ptr() as usize,
         // vm_name_len: vm_arg.name.len(),
@@ -148,9 +74,7 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
         raw_cfg_file_size: config_content.len(),
     };
 
-    let fd = open_driver();
-
-    unsafe { ioctl::ioctl(fd, driver_arg) }.expect("failed to perform ioctl");
+    perform_ioctl(driver_arg);
 
     Ok(())
 }
@@ -159,8 +83,13 @@ pub fn axvmm_boot_shutdown_vm(is_boot: bool, arg: VmBootShutdownArgs) -> Result<
     let vmid = arg.vmid;
     if is_boot {
         println!("Boot VM [{}]", vmid);
+        let driver_arg = VmBootIoctlArg { id: vmid as usize };
+        perform_ioctl(driver_arg);
     } else {
         println!("Shutdown VM [{}]", vmid);
+        let driver_arg = VmShutdownIoctlArg { id: vmid as usize };
+        perform_ioctl(driver_arg);
     }
+
     Ok(())
 }
