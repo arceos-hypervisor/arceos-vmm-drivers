@@ -41,19 +41,25 @@ pub enum HvSubCmd {
 pub enum VmSubCmd {
     /// list the info of the vm
     List,
+    /// Create guest VM according to config file.
+    #[command(arg_required_else_help = true)]
     Create(VmCreateArgs),
+    /// Boot guest VM according to VM id.
+    #[command(arg_required_else_help = true)]
     Boot(VmBootShutdownArgs),
+    /// Shutdown guest VM according to VM id.
+    #[command(arg_required_else_help = true)]
     Shutdown(VmBootShutdownArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct VmCreateArgs {
-    #[arg(short, long)]
+    #[arg(value_name = "CONFIG_PATH")]
     pub config_path: String,
 }
 
 #[derive(Debug, Args)]
 pub struct VmBootShutdownArgs {
-    #[arg(short, long)]
+    #[arg(value_name = "VMID")]
     pub vmid: u64,
 }
