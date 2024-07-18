@@ -46,10 +46,10 @@ pub enum VmSubCmd {
     Create(VmCreateArgs),
     /// Boot guest VM according to VM id.
     #[command(arg_required_else_help = true)]
-    Boot(VmBootShutdownArgs),
+    Boot(VmIdArgs),
     /// Shutdown guest VM according to VM id.
     #[command(arg_required_else_help = true)]
-    Shutdown(VmBootShutdownArgs),
+    Shutdown(VmIdArgs),
 }
 
 #[derive(Debug, Args)]
@@ -59,7 +59,7 @@ pub struct VmCreateArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct VmBootShutdownArgs {
+pub struct VmIdArgs {
     #[arg(value_name = "VMID")]
     pub vmid: u64,
 }

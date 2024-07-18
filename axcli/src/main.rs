@@ -24,12 +24,8 @@ fn main() {
         CLISubCmd::Vm { subcmd } => match subcmd {
             VmSubCmd::List => todo!(),
             VmSubCmd::Create(arg) => vmm::axvmm_create_vm(arg).expect("Failed in axvmm_create_vm"),
-            VmSubCmd::Boot(arg) => {
-                vmm::axvmm_boot_shutdown_vm(true, arg).expect("Failed to boot VM")
-            }
-            VmSubCmd::Shutdown(arg) => {
-                vmm::axvmm_boot_shutdown_vm(false, arg).expect("Failed to shutdown VM")
-            }
+            VmSubCmd::Boot(arg) => vmm::axvmm_boot_vm(arg).expect("Failed to boot VM"),
+            VmSubCmd::Shutdown(arg) => vmm::axvmm_shutdown_vm(arg).expect("Failed to shutdown VM"),
         },
     }
 }

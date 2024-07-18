@@ -1,5 +1,5 @@
 id = 1
-name = "nimbos"
+name = "arceos"
 vm_type = 1
 cpu_set = 2
 entry_point = 0x8000
@@ -9,7 +9,7 @@ kernel_path = "arceos-x86.bin"
 kernel_load_addr = 0x20_0000
 # ramdisk_path = ""
 # ramdisk_load_addr = 0
-# disk_path = ""
+disk_path = "disk.img"
 # Memory regions with format (`base_paddr`, `size`, `flags`).
 memory_regions = [
     [0x0000_0000, 0x100_0000, 0x7],   # Low RAM		16M	0b111

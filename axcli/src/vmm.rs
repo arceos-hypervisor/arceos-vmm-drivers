@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::prelude::*;
@@ -7,8 +8,10 @@ use rustix::fs::{open, Mode, OFlags};
 use rustix::ioctl;
 
 use crate::cfg::VmCreateCliArg;
-use crate::cli::{VmBootShutdownArgs, VmCreateArgs};
-use crate::ioctl_arg::{VmBootIoctlArg, VmCreateIoctlArg, VmShutdownIoctlArg};
+use crate::cli::{VmCreateArgs, VmIdArgs};
+use crate::ioctl_arg::{
+    VmBootIoctlArg, VmCreateIoctlArg, VmGetDiskImgPathIoctlArg, VmShutdownIoctlArg,
+};
 
 pub fn open_driver() -> OwnedFd {
     let driver = String::from("/dev/jailhouse");
@@ -52,26 +55,35 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
         ramdisk_file
     });
 
+    let (disk_image_path_ptr, disk_image_path_length) = if vm_arg.disk_path.is_some() {
+        (
+            vm_arg.disk_path.as_ref().unwrap().as_ptr() as usize,
+            vm_arg.disk_path.as_ref().unwrap().len() as usize,
+        )
+    } else {
+        (0, 0)
+    };
+
+    debug!(
+        "disk_image_path_ptr ref {:#p} usize {:#x} len {:#x}",
+        vm_arg.disk_path.as_ref().unwrap(),
+        disk_image_path_ptr,
+        disk_image_path_length
+    );
+
     let driver_arg = VmCreateIoctlArg {
         id: vm_arg.id,
-        // vm_name_ptr: vm_arg.name.as_ptr() as usize,
-        // vm_name_len: vm_arg.name.len(),
-        // vm_type: vm_arg.vm_type,
         cpu_set: vm_arg.cpu_set,
-        // bios_load_addr: vm_arg.bios_load_addr,
         bios_img_ptr: bios_img_buffer.as_ptr() as usize,
         bios_img_size,
-        // kernel_load_addr: vm_arg.kernel_load_addr,
         kernel_img_ptr: kernel_img_buffer.as_ptr() as usize,
         kernel_img_size,
-        // ramdisk_load_addr: match vm_arg.ramdisk_load_addr {
-        //     Some(ramdisk_load_addr) => ramdisk_load_addr,
-        //     None => 0,
-        // },
         ramdisk_img_ptr,
         ramdisk_img_size,
         raw_cfg_file_ptr: config_content.as_ptr() as usize,
         raw_cfg_file_size: config_content.len(),
+        disk_image_path_ptr,
+        disk_image_path_length,
     };
 
     perform_ioctl(driver_arg);
@@ -79,17 +91,37 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> Result<(), String> {
     Ok(())
 }
 
-pub fn axvmm_boot_shutdown_vm(is_boot: bool, arg: VmBootShutdownArgs) -> Result<(), String> {
-    let vmid = arg.vmid;
-    if is_boot {
-        println!("Boot VM [{}]", vmid);
-        let driver_arg = VmBootIoctlArg { id: vmid as usize };
-        perform_ioctl(driver_arg);
-    } else {
-        println!("Shutdown VM [{}]", vmid);
-        let driver_arg = VmShutdownIoctlArg { id: vmid as usize };
-        perform_ioctl(driver_arg);
-    }
+pub fn axvmm_boot_vm(arg: VmIdArgs) -> Result<(), String> {
+    let id = arg.vmid as usize;
 
+    // Get disk file path from kernel driver.
+    let disk_img_path_raw = vec![0 as u8; 64];
+    let disk_arg = VmGetDiskImgPathIoctlArg {
+        id,
+        disk_image_path_ptr: disk_img_path_raw.as_ptr() as usize,
+    };
+
+    perform_ioctl(disk_arg);
+
+    let disk_img_path: String = unsafe {
+        CString::from_vec_unchecked(disk_img_path_raw)
+            .to_string_lossy()
+            .into()
+    };
+
+    println!("Get VM [{}] disk image path {}", id, disk_img_path);
+
+    println!("Boot VM [{}]", id);
+    let driver_arg = VmBootIoctlArg { id };
+    perform_ioctl(driver_arg);
+
+    Ok(())
+}
+
+pub fn axvmm_shutdown_vm(arg: VmIdArgs) -> Result<(), String> {
+    let id = arg.vmid as usize;
+    println!("Shutdown VM [{}]", id);
+    let driver_arg = VmShutdownIoctlArg { id };
+    perform_ioctl(driver_arg);
     Ok(())
 }
