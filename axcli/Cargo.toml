@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+colored = "2.1.0"
 clap = { version = "4.5.4", features = ["derive"] }
 rustix = { version = "0.38.34", features = ["fs"] }
 libc = "0.2.154"
 serde = { version = "1.0.204", features = ["derive"] }
 toml = "0.8.14"
 env_logger = "0.11.3"
-log = "0.4.21"
+log = "0.4.22"
+bincode = "1.3.3"
+axerrno = "0.1.0"
+axdaemon_request = { path = "../axdaemon_request" }

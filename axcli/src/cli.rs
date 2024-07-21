@@ -54,8 +54,8 @@ pub enum VmSubCmd {
 
 #[derive(Debug, Args)]
 pub struct VmCreateArgs {
-    #[arg(value_name = "CONFIG_PATH")]
-    pub config_path: String,
+    #[arg(value_name = "CONFIG_PATH", value_hint = clap::ValueHint::FilePath)]
+    pub config_path: std::path::PathBuf,
 }
 
 #[derive(Debug, Args)]

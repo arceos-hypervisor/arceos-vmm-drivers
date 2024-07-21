@@ -5,6 +5,7 @@ mod cfg;
 mod cli;
 mod ioctl_arg;
 mod vmm;
+mod daemon;
 
 use clap::Parser;
 use cli::{CLISubCmd, HvSubCmd, VmSubCmd, CLI};
@@ -23,7 +24,7 @@ fn main() {
         },
         CLISubCmd::Vm { subcmd } => match subcmd {
             VmSubCmd::List => todo!(),
-            VmSubCmd::Create(arg) => vmm::axvmm_create_vm(arg).expect("Failed in axvmm_create_vm"),
+            VmSubCmd::Create(arg) => vmm::axvmm_create_vm(arg).expect("Failed to create VM"),
             VmSubCmd::Boot(arg) => vmm::axvmm_boot_vm(arg).expect("Failed to boot VM"),
             VmSubCmd::Shutdown(arg) => vmm::axvmm_shutdown_vm(arg).expect("Failed to shutdown VM"),
         },
