@@ -2,6 +2,8 @@
 name = "axcli"
 version = "0.1.0"
 edition = "2021"
+description = "User CLI tools for arceos-hypervisor."
+license = "Apache-2.0"
 
 [dependencies]
 colored = "2.1.0"
