@@ -8,6 +8,8 @@ use std::net::{IpAddr, Ipv4Addr};
 mod daemon;
 mod listener;
 mod tcp_utils;
+mod uio;
+mod vdev;
 mod vmm;
 
 pub const LOCALHOST: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));

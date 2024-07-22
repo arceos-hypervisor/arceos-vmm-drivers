@@ -10,8 +10,7 @@ use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
 use axdaemon_request::DaemonReply;
 use axerrno::{ax_err_type, AxResult};
 
-use crate::listener::VMMEventWrapper;
-use crate::vmm::VMM;
+use crate::vmm::{VMMEventWrapper, VMM};
 
 /// Events to be handled.
 /// * `VMM`: requests from axcli.
@@ -20,7 +19,7 @@ use crate::vmm::VMM;
 #[derive(Debug)]
 pub enum Event {
     VMM(VMMEventWrapper),
-    // VDEV,
+    VDEV,
     CtrlC,
 }
 
@@ -30,8 +29,10 @@ struct Daemon {
 }
 
 impl Daemon {
-    const fn init() -> Self {
-        Self { vmm: VMM::new() }
+    fn init() -> Self {
+        Self {
+            vmm: VMM::new(),
+        }
     }
 
     pub async fn run(&mut self, bind: SocketAddr) -> AxResult {
@@ -50,7 +51,7 @@ impl Daemon {
         while let Some(event) = events.next().await {
             match event {
                 Event::VMM(vmm_event) => self.handle_vmm_event(vmm_event).await?,
-                // Event::VDEV => todo!(),
+                Event::VDEV => todo!(),
                 Event::CtrlC => todo!(),
             }
         }

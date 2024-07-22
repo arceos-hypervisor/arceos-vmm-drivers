@@ -4,16 +4,11 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 
+use axdaemon_request::DaemonRequest;
 use axerrno::{ax_err, ax_err_type, AxResult};
 
 use crate::tcp_utils::{tcp_receive, tcp_send};
-use axdaemon_request::{DaemonReply, DaemonRequest};
-
-#[derive(Debug)]
-pub struct VMMEventWrapper {
-    pub request: DaemonRequest,
-    pub reply_tx: oneshot::Sender<Option<DaemonReply>>,
-}
+use crate::vmm::VMMEventWrapper;
 
 pub async fn spawn_listener_loop(
     bind: SocketAddr,
