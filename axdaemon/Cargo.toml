@@ -2,7 +2,7 @@
 name = "axdaemon"
 version = "0.1.0"
 edition = "2021"
-description = "Daemon process for arceos-hypervisor for VMM support."
+description = "Daemon process of arceos-hypervisor for VMM support."
 license = "Apache-2.0"
 
 [dependencies]

@@ -25,10 +25,10 @@ struct Args {
     command: Command,
 }
 
-/// dora-rs cli client
+/// AxDaemon: Daemon process of arceos-hypervisor for VMM support. 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// Start daemon.
+    /// Start daemon, make sure to run under **sudo** privilege for mmap related operations. 
     Init {
         /// Address of the dora coordinator
         #[clap(long, value_name = "IP", default_value_t = LOCALHOST)]

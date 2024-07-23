@@ -102,7 +102,7 @@ pub fn axvmm_create_vm(arg: VmCreateArgs) -> AxResult {
         raw_cfg_file_size: config_content.len(),
     };
 
-    // perform_ioctl(driver_arg);
+    perform_ioctl(driver_arg);
 
     info!(
         "VM [{vmid}] created success! Trying to register to {} ...",

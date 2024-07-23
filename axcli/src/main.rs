@@ -3,9 +3,9 @@ extern crate log;
 
 mod cfg;
 mod cli;
+mod daemon;
 mod ioctl_arg;
 mod vmm;
-mod daemon;
 
 use clap::Parser;
 use cli::{CLISubCmd, HvSubCmd, VmSubCmd, CLI};

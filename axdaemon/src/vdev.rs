@@ -183,6 +183,10 @@ fn setup_emulated_block_rw_cache(
     // This field was set by hypervisor
     base.cache_hpa = 0xdead_beef;
 
+    debug!(
+        "Setup cache at gva {:#x} gpa {:#x}",
+        base.cache_gva, base.cache_gpa
+    );
     // Notify hypervisor through ioctl & hvc.
 
     Ok(())
@@ -218,52 +222,33 @@ fn check_cache_address(mmap: &mut MmapMut) -> AxResult {
     Ok(())
 }
 
+/// Translate virtual address into physical address through resolve "/proc/{pid}/pagemap".
 fn get_physical_addr(mmap: &MmapMut) -> AxResult<usize> {
-    use libc::c_ulong;
-    use std::io::{Read, Seek};
+    use pagemap::PageMap;
+    let pid = std::process::id();
+    let page_size = pagemap::page_size().map_err(pagemap_err_to_ax_err)?;
 
-    let vaddr = mmap.as_ptr() as usize;
+    let mut pagemap = PageMap::new(pid as _).map_err(pagemap_err_to_ax_err)?;
 
-    let pagemap_path = format!("/proc/{}/pagemap", std::process::id());
-    let mut file = File::open(&pagemap_path).map_err(|err| {
-        ax_err_type!(InvalidInput, format!("Open {} err: {}", &pagemap_path, err))
-    })?;
+    let maps = pagemap.maps().map_err(pagemap_err_to_ax_err)?;
 
-    let page_size: usize = unsafe { libc::sysconf(libc::_SC_PAGE_SIZE) } as usize;
-    let offset = ((vaddr as usize) / page_size) * (core::mem::size_of::<c_ulong>() as usize);
+    let vaddr = mmap.as_ptr() as u64;
 
-    file.seek(std::io::SeekFrom::Start(offset as u64))
-        .map_err(|err| {
-            ax_err_type!(
-                BadAddress,
-                format!(
-                    "seek on {} at offset {:x} err, {:?}",
-                    pagemap_path.as_str(),
-                    offset,
-                    err
-                )
-            )
-        })?;
+    let memory_region = maps
+        .iter()
+        .find(|m| m.memory_region().contains(vaddr))
+        .expect("Failed to get memory_region from maps read from pagemap")
+        .memory_region();
 
-    let mut pagemap_entry: c_ulong = 0;
+    let index = (vaddr - memory_region.start_address()) / page_size;
 
-    file.read_exact(unsafe {
-        core::slice::from_raw_parts_mut(
-            &mut pagemap_entry as *mut _ as *mut u8,
-            core::mem::size_of::<c_ulong>(),
-        )
-    })
-    .map_err(|err| ax_err_type!(BadAddress, format!("Read page table entry err {:?}", err)))?;
+    let page_map_entry = pagemap
+        .pagemap_region(&memory_region)
+        .map_err(pagemap_err_to_ax_err)?[index as usize];
 
-    // Note:
-    // entry->soft_dirty = (data >> 55) & 1;
-    // entry->file_page = (data >> 61) & 1;
-    // entry->swapped = (data >> 62) & 1;
-    // entry->present = (data >> 63) & 1;
-
-    if (pagemap_entry & (1 << 63)) == 0 {
+    if !page_map_entry.present() {
         return ax_err!(
-            BadAddress,
+            BadState,
             format!(
                 "Virtual Address {:#x} converts to paddr err: page not in memory",
                 vaddr
@@ -271,7 +256,29 @@ fn get_physical_addr(mmap: &MmapMut) -> AxResult<usize> {
         );
     }
 
-    let pfn = pagemap_entry & ((1 << 55) - 1);
-    let paddr = pfn as usize * page_size + vaddr % page_size;
-    Ok(paddr)
+    let pfn = page_map_entry.pfn().map_err(pagemap_err_to_ax_err)?;
+
+    // Without sudo privilege, you may get zero from  /proc/{pid}/pagemap
+    // Check if you get zero and print warning if so.
+    if pfn == 0 {
+        return ax_err!(
+            PermissionDenied,
+            format!(
+                "{} get zero from /proc/{}/pagemap.\n{}",
+                "AxDaemon".bold().green(),
+                pid,
+                "Please make sure you run axdaemon with sudo privileges."
+                    .bold()
+                    .yellow(),
+            )
+        );
+    }
+
+    let paddr = pfn * page_size + vaddr % page_size;
+
+    Ok(paddr as usize)
+}
+
+fn pagemap_err_to_ax_err(e: pagemap::PageMapError) -> axerrno::AxError {
+    ax_err_type!(BadState, format!("PageMapError {e:?}"))
 }
