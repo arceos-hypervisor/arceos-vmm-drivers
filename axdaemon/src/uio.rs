@@ -1,7 +1,3 @@
 use uio;
 
-
-
-pub fn test_uio() {
-
-}
+pub fn test_uio() {}

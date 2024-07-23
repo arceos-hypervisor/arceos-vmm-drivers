@@ -30,9 +30,7 @@ struct Daemon {
 
 impl Daemon {
     fn init() -> Self {
-        Self {
-            vmm: VMM::new(),
-        }
+        Self { vmm: VMM::new() }
     }
 
     pub async fn run(&mut self, bind: SocketAddr) -> AxResult {
